@@ -28,6 +28,7 @@ dependencies {
     compile 'de.mrmaffen:vlc-android-sdk:1.9.8'
 
     compile 'com.android.support:appcompat-v7:26.+'
+    implementation "com.android.support:recyclerview-v7:26.+"
     compile 'com.android.support.constraint:constraint-layout:1.0.2'
     testCompile 'junit:junit:4.12'
 }

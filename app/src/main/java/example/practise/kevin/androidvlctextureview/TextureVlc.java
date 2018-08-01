@@ -5,38 +5,35 @@ import android.graphics.SurfaceTexture;
 import android.media.MediaFormat;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Handler;
 import android.support.annotation.RequiresApi;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.Surface;
 import android.view.TextureView;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
 import org.videolan.libvlc.IVLCVout;
 import org.videolan.libvlc.LibVLC;
 import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
 
-import java.util.ArrayList;
-
 /**
  * Created by app2 on 2017/2/6.
  */
 
-public class TextureVlc extends TextureView implements TextureView.SurfaceTextureListener,IVLCVout.Callback{
-
-    private Handler handler = new Handler();
-    private ArrayList<Toast> msjsToast = new ArrayList<Toast>();
+public class TextureVlc extends TextureView implements TextureView.SurfaceTextureListener, IVLCVout.Callback/*, IVLCVout.OnNewVideoLayoutListener*/ {
 
     public final static String TAG = "LibVLCAndroidSample/VideoActivity";
 
     // media player
-    private LibVLC libvlc;
+    private LibVLC libVlc;
     private MediaPlayer mMediaPlayer = null;
     protected Context mContext;
     private String URL;
-    private boolean check =  true;
+    private boolean check = true;
+    private Surface mSurface = null;
+
+    private VlcVideoView.OnVideoStatusListener onVideoStatusListener;
 
     public TextureVlc(final Context context) {
         super(context);
@@ -58,16 +55,20 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
 
     /**
      * 設定URL
-     * */
-    public String setURL (String url){
-        return  this.URL = url;
+     */
+    public String setURL(String url) {
+        return this.URL = url;
     }
 
     /**
      * setAudio
-     * */
-    public boolean setAudio (boolean setCheck){
-        return  this.check = setCheck;
+     */
+    public boolean setAudio(boolean setCheck) {
+        return this.check = setCheck;
+    }
+
+    public void setOnVideoStatusListener(VlcVideoView.OnVideoStatusListener onVideoStatusListener){
+        this.onVideoStatusListener = onVideoStatusListener;
     }
 
     private void initVideoView() {
@@ -75,11 +76,10 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
         setSurfaceTextureListener(this);
     }
 
-    //show toast
-    protected void showToast(String msg) {
-        Toast t = Toast.makeText(mContext, msg, Toast.LENGTH_LONG);
-        t.show();
-        msjsToast.add(t);
+    private void setSurface(Surface surface) {
+        if (surface.isValid()) {
+            mSurface = surface;
+        }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
@@ -90,57 +90,29 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
         // Create LibVLC
         // TODO: make this more robust, and sync with audio demo
 
-        //新增vlc comment line 內碼
-        ArrayList<String> options = new ArrayList<>();
-//            options.add("--subsdec-encoding <encoding>");
-//            options.add("--aout=opensles");
-        options.add("--no-audio-time-stretch"); // time stretching
-        options.add("-vvv"); // verbosity
-        //no audio
-        if(!check){
-            options.add("--aout=none");
-        }
-        options.add("--no-sub-autodetect-file");
-        options.add("--swscale-mode=0");
-        options.add("--network-caching=60000");
-        options.add("--avcodec-hw=any");
-//        options.add("--rtsp-mcast");
-//        options.add("--rtsp-kasenna");
-        options.add("--rtsp-tcp");
-        options.add("--no-skip-frames");
-        options.add("--no-drop-late-frames");
-        options.add("--no-skip-frames");
-        options.add("--http-continuous");
-        options.add("--repeat");
-        options.add("--loop");
-        options.add("-R");
-        options.add("--http-reconnect");
-//            if (BuildConfig.DEBUG) {
-//                options.add("-vvv"); // verbosity
-//            }
-
-        //new libVLC
-        libvlc = new LibVLC(options);
-//            libvlc = new LibVLC();
 
         // Create media player
-        mMediaPlayer = new MediaPlayer(libvlc);
+        mMediaPlayer = new MediaPlayer(libVlc);
         final IVLCVout vout = mMediaPlayer.getVLCVout();
         // Set up video output
-        vout.setVideoView(this);
+        //vout.setVideoView(this);
+
+        Surface surface = new Surface(surfaceTexture);
+        setSurface(surface);
+        vout.setVideoSurface(surface, null);
+
         vout.addCallback(this);
-        if(vout.areViewsAttached())
-        {
+        if (vout.areViewsAttached()) {
             vout.detachViews();
         }
         vout.attachViews();
 
         //new media container
-        final Media m = new Media(libvlc, Uri.parse(URL));
+        final Media m = new Media(libVlc, Uri.parse(URL));
         //set decoder message hide
         m.setHWDecoderEnabled(true, true);
         //add media comment line
-        m.addOption(":network-caching=5000");
+        m.addOption(":network-caching=1000");
         m.addOption(":clock-jitter=400");
         m.addOption(":clock-synchro=500");
 
@@ -154,29 +126,40 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
             @Override
             public void onEvent(MediaPlayer.Event event) {
                 switch (event.type) {
+                    /*case MediaPlayer.Event.Buffering:
+                        if(event.getBuffering() == 100f){
+                            onVideoStatusListener.onStreamLived();
+                        } else {
+                            onVideoStatusListener.onStreamBuffering();
+                        }
+                        break;*/
                     case MediaPlayer.Event.EndReached:
-                        showToast("The connection is interrupted, reconnected");
+                      //  showToast("The connection is interrupted, reconnected");
+                        onVideoStatusListener.onConnectPrepared();
                         mMediaPlayer.setMedia(m);
                         //play stream
                         mMediaPlayer.play();
                         break;
                     case MediaPlayer.Event.Playing:
-                        showToast("The connection is successful and starts playing");
+                       // showToast("The connection is successful and starts playing");
+                        onVideoStatusListener.onConnectPrepared();
                         break;
                     case MediaPlayer.Event.Paused:
                         break;
                     case MediaPlayer.Event.Stopped:
                         break;
                     case MediaPlayer.Event.Opening:
-                        showToast("Connecting, please wait ...");
+                       // showToast("Connecting, please wait ...");
+                        onVideoStatusListener.onConnectPrepared();
                         break;
                     case MediaPlayer.Event.PositionChanged:
                         break;
                     case MediaPlayer.Event.EncounteredError:
-                        showToast("Connection failed, reconnected");
-                        mMediaPlayer.setMedia(m);
+                        //showToast("Connection failed, reconnected");
+                        onVideoStatusListener.onConnectFailed();
+                        //mMediaPlayer.setMedia(m);
                         //play stream
-                        mMediaPlayer.play();
+                        //mMediaPlayer.play();
                         break;
                     default:
                         break;
@@ -218,7 +201,7 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
 
         //直接設定熒幕符合方格大小
         ViewGroup.LayoutParams lp = this.getLayoutParams();
-        lp.width =ViewGroup.LayoutParams.MATCH_PARENT;
+        lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
 //        lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
         //set layout
 //        lp.width = w;
@@ -231,52 +214,64 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
     @Override
     public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
         //set size
-        setSize(width,height);
+        setSize(width, height);
     }
 
     @Override
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
         //remove
         releasePlayer();
+        onVideoStatusListener.onConnectPrepared();
         return false;
     }
 
     @Override
     public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-
-    }
-
-    private void killAllToast(){
-        for(Toast t:msjsToast){
-            if(t!=null) {
-                t.cancel();
-            }
+        //Log.i("onSurfaceTextureUpdated", "onSurfaceTextureUpdated");
+        if(surface.getTimestamp() > 0){
+            //onVideoStatusListener.onStreamLived();
         }
-        msjsToast.clear();
+        surface.setDefaultBufferSize(1280, 720);
+        //setSize(1280, 720);
     }
-
 
     public void releasePlayer() {
-        if (libvlc == null)
+        if (libVlc == null)
             return;
         mMediaPlayer.stop();
         final IVLCVout vout = mMediaPlayer.getVLCVout();
         mMediaPlayer.setEventListener(null);
         vout.removeCallback(this);
         vout.detachViews();
-        libvlc.release();
-        libvlc = null;
-        killAllToast();
+
+        if (mSurface != null) {
+            mSurface.release();
+            mSurface = null;
+        }
+
+        // TODO Надо ли
+        /*libVlc.release();
+        libVlc = null;*/
     }
 
     @Override
     public void onNewLayout(IVLCVout vlcVout, int width, int height, int visibleWidth, int visibleHeight, int sarNum, int sarDen) {
         if (width * height == 0)
             return;
+        //onVideoStatusListener.onStreamLived();
         // store video size
-        setSize(width, height);
+        //setSize(width, height);
     }
-
+/*
+    @Override
+    public void onNewVideoLayout(IVLCVout vlcVout, int width, int height, int visibleWidth, int visibleHeight, int sarNum, int sarDen) {
+        if (width * height == 0)
+            return;
+       // onVideoStatusListener.onStreamLived();
+        // store video size
+        //setSize(width, height);
+    }
+*/
     @Override
     public void onSurfacesCreated(IVLCVout vlcVout) {
         Log.i("onSurfacesCreated", "onSurfacesCreated");
@@ -284,7 +279,7 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
 
     @Override
     public void onSurfacesDestroyed(IVLCVout vlcVout) {
-        releasePlayer();
+        //releasePlayer();
         Log.i("onSurfacesDestroyed", "onSurfacesDestroyed");
     }
 
@@ -292,5 +287,9 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
     public void onHardwareAccelerationError(IVLCVout vlcVout) {
         Log.i("TAG", "@@");
         this.releasePlayer();
+    }
+
+    public void setLibVlC(LibVLC libVlc) {
+        this.libVlc = libVlc;
     }
 }
