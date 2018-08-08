@@ -31,6 +31,7 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
     protected Context mContext;
     private String URL;
     private boolean check = true;
+    private boolean isSurfaceGenerated = false;
     private Surface mSurface = null;
 
     private VlcVideoView.OnVideoStatusListener onVideoStatusListener;
@@ -85,47 +86,55 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
-        MediaFormat format = new MediaFormat();
-        format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 0);
-        // Create LibVLC
-        // TODO: make this more robust, and sync with audio demo
+        if (!isSurfaceGenerated) {
+            // return;
 
+            playVideo();
+            MediaFormat format = new MediaFormat();
+            format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 0);
 
-        // Create media player
-        mMediaPlayer = new MediaPlayer(libVlc);
+            // Create media player
+            mMediaPlayer = new MediaPlayer(libVlc);
+
+            // Set up video output
+            //vout.setVideoView(this);
+        }
         final IVLCVout vout = mMediaPlayer.getVLCVout();
-        // Set up video output
-        //vout.setVideoView(this);
-
-        Surface surface = new Surface(surfaceTexture);
-        setSurface(surface);
-        vout.setVideoSurface(surface, null);
-
-        vout.addCallback(this);
+        if(mSurface == null) {
+            Surface surface = new Surface(surfaceTexture);
+            setSurface(surface);
+        }
         if (vout.areViewsAttached()) {
             vout.detachViews();
         }
+        vout.setVideoSurface(mSurface, null);
+
+        vout.addCallback(this);
+
+
         vout.attachViews();
 
-        //new media container
-        final Media m = new Media(libVlc, Uri.parse(URL));
-        //set decoder message hide
-        m.setHWDecoderEnabled(true, true);
-        //add media comment line
-        m.addOption(":network-caching=1000");
-        m.addOption(":clock-jitter=400");
-        m.addOption(":clock-synchro=500");
+        if(!isSurfaceGenerated) {
 
-        //decoder all media type
-        m.addOption(":codec=ALL");
-        mMediaPlayer.setMedia(m);
-        //play stream
-        mMediaPlayer.play();
-        //播放器監聽事件
-        mMediaPlayer.setEventListener(new MediaPlayer.EventListener() {
-            @Override
-            public void onEvent(MediaPlayer.Event event) {
-                switch (event.type) {
+
+            //new media container
+            final Media m = new Media(libVlc, Uri.parse(URL));
+            //set decoder message hide
+            m.setHWDecoderEnabled(true, true);
+            //add media comment line
+            m.addOption(":network-caching=1000");
+            m.addOption(":clock-jitter=400");
+            m.addOption(":clock-synchro=500");
+
+            //decoder all media type
+            m.addOption(":codec=ALL");
+            mMediaPlayer.setMedia(m);
+            //play stream
+            mMediaPlayer.play();
+            mMediaPlayer.setEventListener(new MediaPlayer.EventListener() {
+                @Override
+                public void onEvent(MediaPlayer.Event event) {
+                    switch (event.type) {
                     /*case MediaPlayer.Event.Buffering:
                         if(event.getBuffering() == 100f){
                             onVideoStatusListener.onStreamLived();
@@ -133,39 +142,45 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
                             onVideoStatusListener.onStreamBuffering();
                         }
                         break;*/
-                    case MediaPlayer.Event.EndReached:
-                      //  showToast("The connection is interrupted, reconnected");
-                        onVideoStatusListener.onConnectPrepared();
-                        mMediaPlayer.setMedia(m);
-                        //play stream
-                        mMediaPlayer.play();
-                        break;
-                    case MediaPlayer.Event.Playing:
-                       // showToast("The connection is successful and starts playing");
-                        onVideoStatusListener.onConnectPrepared();
-                        break;
-                    case MediaPlayer.Event.Paused:
-                        break;
-                    case MediaPlayer.Event.Stopped:
-                        break;
-                    case MediaPlayer.Event.Opening:
-                       // showToast("Connecting, please wait ...");
-                        onVideoStatusListener.onConnectPrepared();
-                        break;
-                    case MediaPlayer.Event.PositionChanged:
-                        break;
-                    case MediaPlayer.Event.EncounteredError:
-                        //showToast("Connection failed, reconnected");
-                        onVideoStatusListener.onConnectFailed();
-                        //mMediaPlayer.setMedia(m);
-                        //play stream
-                        //mMediaPlayer.play();
-                        break;
-                    default:
-                        break;
+                        case MediaPlayer.Event.EndReached:
+                            //  showToast("The connection is interrupted, reconnected");
+                            onVideoStatusListener.onConnectPrepared();
+                            mMediaPlayer.setMedia(m);
+                            //play stream
+                            mMediaPlayer.play();
+                            break;
+                        case MediaPlayer.Event.Playing:
+                            // showToast("The connection is successful and starts playing");
+                            onVideoStatusListener.onConnectPrepared();
+                            break;
+                        case MediaPlayer.Event.Paused:
+                            break;
+                        case MediaPlayer.Event.Stopped:
+                            break;
+                        case MediaPlayer.Event.Opening:
+                            // showToast("Connecting, please wait ...");
+                            onVideoStatusListener.onConnectPrepared();
+                            break;
+                        case MediaPlayer.Event.PositionChanged:
+                            break;
+                        case MediaPlayer.Event.EncounteredError:
+                            //showToast("Connection failed, reconnected");
+                            onVideoStatusListener.onConnectFailed();
+                            //mMediaPlayer.setMedia(m);
+                            //play stream
+                            //mMediaPlayer.play();
+                            break;
+                        default:
+                            break;
+                    }
                 }
-            }
-        });
+            });
+        }
+        isSurfaceGenerated = true;
+    }
+
+    private void playVideo(){
+
     }
 
     /*************
@@ -220,7 +235,7 @@ public class TextureVlc extends TextureView implements TextureView.SurfaceTextur
     @Override
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
         //remove
-        releasePlayer();
+       // releasePlayer();
         onVideoStatusListener.onConnectPrepared();
         return false;
     }

@@ -49,7 +49,7 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoViewHolder> {
 //            options.add("--aout=opensles");
         options.add("--no-audio-time-stretch"); // time stretching
         options.add("-vvv"); // verbosity
-        //options.add("--aout=none");
+        options.add("--aout=none");
 
         options.add("--no-sub-autodetect-file");
         options.add("--swscale-mode=0");
